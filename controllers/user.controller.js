@@ -2,6 +2,7 @@ const {StatusCodes} = require('http-status-codes');
 const User = require('../models/user.model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const EmailSender = require('../utils/sendEmail');
 const secret = process.env.ACCESS_TOKEN_SECRET;
 
 const userCtrl = {
@@ -58,6 +59,46 @@ const userCtrl = {
       const id = req.user;
       const findUser = await User.findById(id);
       return res.status(StatusCodes.OK).json(findUser);
+    } catch (error) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({msg: error});
+    }
+  },
+  forgotPassword: async (req, res) => {
+    try {
+      const {email} = req.body;
+      const findUser = await User.findOne({email});
+      if (findUser) {
+        const token = jwt.sign({id: findUser._id}, secret);
+        const url = 'http://localhost:3000/reset/' + token;
+        await EmailSender({
+          email,
+          subject: 'Reset Password',
+          heading: 'Reset Password',
+          text: 'Click on below url to reset your password',
+          spanText: 'Reset',
+          url,
+        });
+        return res
+          .status(StatusCodes.OK)
+          .json({msg: 'Email has been sent successfully'});
+      } else {
+        return res
+          .status(StatusCodes.BAD_REQUEST)
+          .json({msg: 'No User found!'});
+      }
+    } catch (error) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({msg: error});
+    }
+  },
+  resetPassword: async (req, res) => {
+    try {
+      const {password} = req.body;
+      const id = req.user;
+      const hashPassword = await bcrypt.hash(password, 12);
+      await User.findByIdAndUpdate(id, {password: hashPassword});
+      return res
+        .status(StatusCodes.OK)
+        .json({msg: 'Password reset successfully'});
     } catch (error) {
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({msg: error});
     }
